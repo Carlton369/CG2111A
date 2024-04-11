@@ -5,6 +5,7 @@
 #include "packet.h"
 #include "constants.h"
 
+
 volatile TDirection dir;
 
 /*
