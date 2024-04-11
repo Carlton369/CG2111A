@@ -1,24 +1,34 @@
-#include <AFMotor.h>
-
 #include <serialize.h>
+#include <stdarg.h>
+#include <math.h>
 
 #include "packet.h"
 #include "constants.h"
+
+volatile TDirection dir;
 
 /*
  * Alex's configuration constants
  */
 
-// Number of ticks per revolution from the
+// Number of ticks per revolution from the 
 // wheel encoder.
 
-#define COUNTS_PER_REV      1
+#define COUNTS_PER_REV      8
 
 // Wheel circumference in cm.
-// We will use this to calculate forward/backward distance traveled
+// We will use this to calculate forward/backward distance traveled 
 // by taking revs * WHEEL_CIRC
 
-#define WHEEL_CIRC          1
+#define WHEEL_CIRC          19
+
+#define ALEX_LENGTH 16
+#define ALEX_BREADTH 6
+
+//#define PI 3.14152654
+
+float alexDiagonal = 0.0;
+float alexCirc = 0.0;
 
 /*
  *    Alex's State Variables
@@ -26,8 +36,17 @@
 
 // Store the ticks from Alex's left and
 // right encoders.
-volatile unsigned long leftTicks;
-volatile unsigned long rightTicks;
+volatile unsigned long leftForwardTicks; 
+volatile unsigned long rightForwardTicks;
+volatile unsigned long leftReverseTicks; 
+volatile unsigned long rightReverseTicks;
+
+// Left and right encoder ticks for turning
+
+volatile unsigned long leftForwardTicksTurns; 
+volatile unsigned long rightForwardTicksTurns;
+volatile unsigned long leftReverseTicksTurns; 
+volatile unsigned long rightReverseTicksTurns;
 
 // Store the revolutions on Alex's left
 // and right wheels
@@ -37,20 +56,51 @@ volatile unsigned long rightRevs;
 // Forward and backward distance traveled
 volatile unsigned long forwardDist;
 volatile unsigned long reverseDist;
+unsigned long deltaDist;
+unsigned long newDist;
+
+unsigned long deltaTicks;
+unsigned long targetTicks;
+
+unsigned long colour;
+unsigned long usFrontDist;
+unsigned long usReverseDist; 
+
+unsigned long computeDeltaTicks(float ang) {
+  unsigned long ticks = (unsigned long) ((ang * alexCirc * COUNTS_PER_REV) / (360.0 * WHEEL_CIRC));
+
+  return ticks;
+}
+
+void left(float ang, float speed) {
+  if(ang == 0) deltaTicks=99999999; 
+  else deltaTicks=computeDeltaTicks(ang);
+  
+  targetTicks = leftReverseTicksTurns + deltaTicks;
+  ccw(ang,speed);
+}
+
+void right(float ang, float speed) {
+  if(ang == 0) deltaTicks=99999999; 
+  else deltaTicks=computeDeltaTicks(ang);
+  
+  targetTicks = leftForwardTicksTurns + deltaTicks;
+  cw(ang,speed);
+}
 
 
 /*
- *
+ * 
  * Alex Communication Routines.
- *
+ * 
  */
-
+ 
 TResult readPacket(TPacket *packet)
 {
     // Reads in data from the serial port and
     // deserializes it.Returns deserialized
     // data in "packet".
-
+    
     char buffer[PACKET_SIZE];
     int len;
 
@@ -60,7 +110,7 @@ TResult readPacket(TPacket *packet)
       return PACKET_INCOMPLETE;
     else
       return deserialize(buffer, len, packet);
-
+    
 }
 
 void sendStatus()
@@ -71,48 +121,74 @@ void sendStatus()
   // Use the params array to store this information, and set the
   // packetType and command files accordingly, then use sendResponse
   // to send out the packet. See sendMessage on how to use sendResponse.
-  //
+  TPacket statusPacket;
+  statusPacket.packetType = PACKET_TYPE_RESPONSE;
+  statusPacket.command = RESP_STATUS;
+
+  statusPacket.params[0] = leftForwardTicks;
+  statusPacket.params[1] = rightForwardTicks;
+  statusPacket.params[2] = leftReverseTicks;
+  statusPacket.params[3] = rightReverseTicks;
+  statusPacket.params[4] = leftForwardTicksTurns;
+  statusPacket.params[5] = rightForwardTicksTurns;
+  statusPacket.params[6] = leftReverseTicksTurns;
+  statusPacket.params[7] = rightReverseTicksTurns;
+  statusPacket.params[8] = forwardDist;
+  statusPacket.params[9] = reverseDist;
+  statusPacket.params[10] = colour;
+  statusPacket.params[11] = usFrontDist;
+  statusPacket.params[12] = usReverseDist;
+  sendResponse(&statusPacket);
 }
 
 void sendMessage(const char *message)
 {
   // Sends text messages back to the Pi. Useful
   // for debugging.
-
+  
   TPacket messagePacket;
   messagePacket.packetType=PACKET_TYPE_MESSAGE;
   strncpy(messagePacket.data, message, MAX_STR_LEN);
   sendResponse(&messagePacket);
 }
 
+void dbprintf(char *format, ...) {
+  va_list args; 
+  char buffer[128]; 
+
+  va_start(args, format); 
+  vsprintf(buffer, format, args); 
+  sendMessage(buffer); 
+  }
+
 void sendBadPacket()
 {
   // Tell the Pi that it sent us a packet with a bad
   // magic number.
-
+  
   TPacket badPacket;
   badPacket.packetType = PACKET_TYPE_ERROR;
   badPacket.command = RESP_BAD_PACKET;
   sendResponse(&badPacket);
-
+  
 }
 
 void sendBadChecksum()
 {
   // Tell the Pi that it sent us a packet with a bad
   // checksum.
-
+  
   TPacket badChecksum;
   badChecksum.packetType = PACKET_TYPE_ERROR;
   badChecksum.command = RESP_BAD_CHECKSUM;
-  sendResponse(&badChecksum);
+  sendResponse(&badChecksum);  
 }
 
 void sendBadCommand()
 {
   // Tell the Pi that we don't understand its
   // command sent to us.
-
+  
   TPacket badCommand;
   badCommand.packetType=PACKET_TYPE_ERROR;
   badCommand.command=RESP_BAD_COMMAND;
@@ -132,7 +208,7 @@ void sendOK()
   TPacket okPacket;
   okPacket.packetType = PACKET_TYPE_RESPONSE;
   okPacket.command = RESP_OK;
-  sendResponse(&okPacket);
+  sendResponse(&okPacket);  
 }
 
 void sendResponse(TPacket *packet)
@@ -148,42 +224,89 @@ void sendResponse(TPacket *packet)
 
 
 /*
- * Setup and start codes for external interrupts and
+ * Setup and start codes for external interrupts and 
  * pullup resistors.
- *
+ * 
  */
 // Enable pull up resistors on pins 18 and 19
 void enablePullups()
 {
+  DDRD = 0;
+  PORTD = 0b00001100;
   // Use bare-metal to enable the pull-up resistors on pins
   // 19 and 18. These are pins PD2 and PD3 respectively.
-  // We set bits 2 and 3 in DDRD to 0 to make them inputs.
+  // We set bits 2 and 3 in DDRD to 0 to make them inputs. 
+  
+}
 
+ISR(INT2_vect) {
+  rightISR();
+}
+
+ISR(INT3_vect) {
+  leftISR();
 }
 
 // Functions to be called by INT2 and INT3 ISRs.
 void leftISR()
 {
-  leftTicks++;
-  Serial.print("LEFT: ");
-  Serial.println(leftTicks);
+  switch(dir) {
+    case FORWARD:
+      leftForwardTicks+= 1;
+      forwardDist = (unsigned long) ((float) leftForwardTicks / COUNTS_PER_REV * WHEEL_CIRC);
+      // dbprintf("leftForwardTicks: %lu\n", leftForwardTicks);
+      // dbprintf("forwardDist: %lu\n", forwardDist);
+      break;
+    case BACKWARD:
+      leftReverseTicks+= 1;
+      reverseDist = (unsigned long) ((float) leftReverseTicks / COUNTS_PER_REV * WHEEL_CIRC);
+      // dbprintf("leftReverseTicks: %lu\n", leftReverseTicks);
+      // dbprintf("reverseDist: %lu\n", reverseDist);
+      break;
+    case LEFT:
+      leftReverseTicksTurns+= 1;
+      // dbprintf("leftReverseTicksTurns: %lu\n", leftReverseTicksTurns);
+      break;
+    case RIGHT:
+      leftForwardTicksTurns+= 1;
+      // dbprintf("leftForwardTicksTurns: %lu\n", leftForwardTicksTurns);
+      break;
+  }
 }
 
 void rightISR()
 {
-  rightTicks++;
-  Serial.print("RIGHT: ");
-  Serial.println(rightTicks);
+  switch(dir) {
+    case FORWARD:
+      rightForwardTicks+= 1;
+      // dbprintf("rightForwardTicks: %lu\n", rightForwardTicks);
+      break;
+    case BACKWARD:
+      rightReverseTicks+= 1;
+      // dbprintf("rightReverseTicks: %lu\n", rightReverseTicks);
+      break;
+    case LEFT:
+      rightForwardTicksTurns+= 1;
+      // dbprintf("rightForwardTicksTurns: %lu\n", rightForwardTicksTurns);
+      break;
+    case RIGHT:
+      rightReverseTicksTurns+= 1;
+      // dbprintf("rightReverseTicksTurns: %lu\n", rightReverseTicksTurns);
+      break;
+  }
 }
 
 // Set up the external interrupt pins INT2 and INT3
 // for falling edge triggered. Use bare-metal.
 void setupEINT()
 {
+  EIMSK = 0b00001100;
+  EICRA = 0b10100000;
   // Use bare-metal to configure pins 18 and 19 to be
   // falling edge triggered. Remember to enable
   // the INT2 and INT3 interrupts.
   // Hint: Check pages 110 and 111 in the ATmega2560 Datasheet.
+
 
 }
 
@@ -196,9 +319,9 @@ void setupEINT()
 
 /*
  * Setup and start codes for serial communications
- *
+ * 
  */
-// Set up the serial connection. For now we are using
+// Set up the serial connection. For now we are using 
 // Arduino Wiring, you will replace this later
 // with bare-metal code.
 void setupSerial()
@@ -216,11 +339,11 @@ void startSerial()
 {
   // Empty for now. To be replaced with bare-metal code
   // later on.
-
+  
 }
 
 // Read the serial port. Returns the read character in
-// ch if available. Also returns TRUE if ch is valid.
+// ch if available. Also returns TRUE if ch is valid. 
 // This will be replaced later with bare-metal code.
 
 int readSerial(char *buffer)
@@ -247,53 +370,32 @@ void writeSerial(const char *buffer, int len)
 
 /*
  * Alex's setup and run codes
- *
+ * 
  */
 
 // Clears all our counters
 void clearCounters()
 {
-  leftTicks=0;
-  rightTicks=0;
+  leftForwardTicks = 0;
+  rightForwardTicks= 0;
+  leftReverseTicks = 0;
+  rightReverseTicks = 0;
+
+  leftForwardTicksTurns = 0; 
+  rightForwardTicksTurns = 0;
+  leftReverseTicksTurns = 0; 
+  rightReverseTicksTurns = 0;
+
   leftRevs=0;
   rightRevs=0;
   forwardDist=0;
-  reverseDist=0;
+  reverseDist=0; 
 }
 
 // Clears one particular counter
 void clearOneCounter(int which)
 {
-  switch(which)
-  {
-    case 0:
-      clearCounters();
-      break;
-
-    case 1:
-      leftTicks=0;
-      break;
-
-    case 2:
-      rightTicks=0;
-      break;
-
-    case 3:
-      leftRevs=0;
-      break;
-
-    case 4:
-      rightRevs=0;
-      break;
-
-    case 5:
-      forwardDist=0;
-      break;
-
-    case 6:
-      reverseDist=0;
-      break;
-  }
+  clearCounters();
 }
 // Intialize Alex's internal states
 
@@ -308,15 +410,45 @@ void handleCommand(TPacket *command)
   {
     // For movement commands, param[0] = distance, param[1] = speed.
     case COMMAND_FORWARD:
-        sendOK();
-        forward((double) command->params[0], (float) command->params[1]);
+      sendOK();
+      forward((double) command->params[0], (float) command->params[1]);
       break;
 
-    /*
-     * Implement code for other commands here.
-     *
-     */
+    case COMMAND_REVERSE:
+      sendOK();
+      backward((double) command->params[0], (float) command->params[1]);
+      break;
 
+    case COMMAND_TURN_LEFT:
+      sendOK();
+      left((double) command->params[0], (float) command->params[1]);
+      break;
+
+    case COMMAND_TURN_RIGHT:
+      sendOK();
+      right((double) command->params[0], (float) command->params[1]);
+      break;
+
+    case COMMAND_STOP:
+      sendOK();
+      stop();
+      break;
+
+    case COMMAND_GET_STATS:
+      sendOK();
+      sendStatus();
+      break;
+
+    case COMMAND_CLEAR_STATS:
+      sendOK();
+      clearOneCounter(command->params[0]);
+      break;
+
+  /*  case COMMAND_GET_COLOUR:
+      sendOK();
+      detectColour();
+      break;*/
+      
     default:
       sendBadCommand();
   }
@@ -330,7 +462,7 @@ void waitForHello()
   {
     TPacket hello;
     TResult result;
-
+    
     do
     {
       result = readPacket(&hello);
@@ -340,7 +472,7 @@ void waitForHello()
     {
       if(hello.packetType == PACKET_TYPE_HELLO)
       {
-
+     
 
         sendOK();
         exit=1;
@@ -361,6 +493,9 @@ void waitForHello()
 
 void setup() {
   // put your setup code here, to run once:
+
+  alexDiagonal = sqrt((ALEX_LENGTH * ALEX_LENGTH) + (ALEX_BREADTH * ALEX_BREADTH)); 
+  alexCirc = PI * alexDiagonal;
 
   cli();
   setupEINT();
@@ -396,28 +531,72 @@ void handlePacket(TPacket *packet)
 void loop() {
 // Uncomment the code below for Step 2 of Activity 3 in Week 8 Studio 2
 
- //forward(0, 100);
+//  forward(0, 100);
 
 // Uncomment the code below for Week 9 Studio 2
 
-/*
  // put your main code here, to run repeatedly:
   TPacket recvPacket; // This holds commands from the Pi
 
   TResult result = readPacket(&recvPacket);
-
-  if(result == PACKET_OK)
+  
+  if(result == PACKET_OK) {
     handlePacket(&recvPacket);
-  else
+  }
+  else {
     if(result == PACKET_BAD)
     {
       sendBadPacket();
     }
-    else
+    else {
       if(result == PACKET_CHECKSUM_BAD)
       {
         sendBadChecksum();
+      } 
+    }
+  }
+  
+  if(deltaDist > 0) { 
+    if(dir==FORWARD) { 
+      if(forwardDist > newDist) { 
+        deltaDist=0; 
+        newDist=0; 
+        stop(); 
+      } 
+    }
+    else if(dir == BACKWARD) {
+      if(reverseDist > newDist) { 
+        deltaDist=0; 
+        newDist=0; 
+        stop(); 
       }
+    }
+    else if(dir == (TDirection) STOP) {
+      deltaDist=0;
+      newDist=0;
+      stop();
+    }
+  }
 
-      */
+  if (deltaTicks > 0) {
+    if (dir == LEFT) {
+      if (leftReverseTicksTurns >= targetTicks) {
+        deltaTicks = 0;
+        targetTicks = 0;
+        stop();
+      }
+    }
+    else if (dir == RIGHT) {
+        if (leftForwardTicksTurns >= targetTicks) {
+          deltaTicks = 0;
+          targetTicks = 0;
+          stop();
+        }
+      }
+    else if (dir == (TDirection) STOP) {
+        deltaTicks = 0;
+        targetTicks = 0;
+        stop();
+    } 
+  }
 }

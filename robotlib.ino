@@ -1,13 +1,4 @@
 #include <AFMotor.h>
-// Direction values
-typedef enum dir
-{
-  STOP,
-  GO,
-  BACK,
-  CCW,
-  CW
-} dir;
 
 // Motor control
 #define FRONT_LEFT   4 // M4 on the driver shield
@@ -34,56 +25,67 @@ void move(float speed, int direction)
         motorFL.run(BACKWARD);
         motorFR.run(BACKWARD);
         motorBL.run(FORWARD);
-        motorBR.run(FORWARD);
+        motorBR.run(FORWARD); 
       break;
       case GO:
         motorFL.run(FORWARD);
         motorFR.run(FORWARD);
         motorBL.run(BACKWARD);
-        motorBR.run(BACKWARD);
+        motorBR.run(BACKWARD); 
       break;
       case CW:
         motorFL.run(BACKWARD);
         motorFR.run(FORWARD);
         motorBL.run(FORWARD);
-        motorBR.run(BACKWARD);
+        motorBR.run(BACKWARD); 
       break;
       case CCW:
         motorFL.run(FORWARD);
         motorFR.run(BACKWARD);
         motorBL.run(BACKWARD);
-        motorBR.run(FORWARD);
+        motorBR.run(FORWARD); 
       break;
       case STOP:
       default:
         motorFL.run(STOP);
         motorFR.run(STOP);
         motorBL.run(STOP);
-        motorBR.run(STOP);
+        motorBR.run(STOP); 
     }
 }
 
 void forward(float dist, float speed)
 {
+  dir = (TDirection) FORWARD;
   move(speed, FORWARD);
+  if (dist > 0) deltaDist = dist;
+  else deltaDist = 9999999;
+  newDist = forwardDist + deltaDist;
 }
 
 void backward(float dist, float speed)
 {
+  dir = (TDirection) BACKWARD;
   move(speed, BACKWARD);
+  if (dist > 0) deltaDist = dist;
+  else deltaDist = 9999999;
+  newDist = reverseDist + deltaDist;
 }
 
 void ccw(float dist, float speed)
 {
+  dir = (TDirection) LEFT;
   move(speed, CCW);
 }
 
 void cw(float dist, float speed)
 {
+  dir = (TDirection) RIGHT;
   move(speed, CW);
 }
 
 void stop()
 {
+  dir = (TDirection) STOP;
   move(0, STOP);
 }
