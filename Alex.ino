@@ -13,7 +13,7 @@ volatile TDirection dir;
  */
 
 // Number of ticks per revolution from the 
-// wheel encoder
+// wheel encoder.
 
 #define COUNTS_PER_REV      8
 
