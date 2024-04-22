@@ -1,5 +1,3 @@
-
-
 #include <serialize.h>
 //#include "Arduino.h"
 // #include <buffer.h>
@@ -7,15 +5,6 @@
 #include <math.h>
 #include "packet.h"
 #include "constants.h"
-
-
-// typedef enum {
-//   STOP = 0,
-//   FORWARD = 1,
-//   BACKWARD = 2,
-//   LEFT = 3,
-//   RIGHT = 4
-// } TDirection;
 
 volatile TDirection dir; // = STOP;
 
@@ -36,18 +25,11 @@ volatile TDirection dir; // = STOP;
 
 #define WHEEL_CIRC          21
 
-// Motor control pins. You need to adjust these till
-// Alex moves in the correct direction
-// #define LF                  10 // Left forward pin
-// #define LR                  11 // Left reverse pin
-// #define RF                  6  // Right forward pin
-// #define RR                  5  // Right reverse pin
-
 /*
       Alex's State Variables
 */
 
-#define PI 3.141592654
+
 #define ALEX_LENGTH 26         //to adjust turning angle (lower means decrease turning angle)
 #define ALEX_BREADTH 15       //original dimensions: 16 by 6
 
@@ -83,29 +65,16 @@ volatile unsigned long reverseDist;
 unsigned long deltaDist;
 unsigned long newDist;
 
-//color sensor constants---------------------------------
 
-// // Stores frequency read by the photodiodes
-// int redFrequency = 0;
-// int greenFrequency = 0;
-// int blueFrequency = 0;
+// Stores frequency read by the photodiodes
+volatile signed int redFrequency = 0;
+volatile signed int greenFrequency = 0;
+volatile signed int blueFrequency = 0;
 
-// // Stores the red. green and blue colors
-// int redColour = 0;
-// int greenColour = 0;
-// int blueColour = 0;
-
-//Ultrasonic sensor constants----------------------------------------------
-// Define ultrasonic sensor pins
-// const int trigPinLeft = A0; // left ultrasonic sensor trig pin (White)
-// const int echoPinLeft = A1; // left ultrasonic sensor echo pin (Blue)
-// const int trigPinRight = A2; // right ultrasonic sensor trig pin (Yellow)
-// const int echoPinRight = A3; // right ultrasonic sensor echo pin (Green)
-
-// // Define variable to store distance readings
-// int distanceLeft = 0; // distance from left ultrasonic sensor
-// int distanceRight = 0; // distance from right ultrasonic sensor
-
+// Stores the red. green and blue colors
+volatile signed int redColour = 0;
+volatile signed int greenColour = 0;
+volatile signed int blueColour = 0;
 
 /*
    Alex Communication Routines.
@@ -141,19 +110,19 @@ void sendStatus()
   TPacket statusPacket;
   statusPacket.packetType = PACKET_TYPE_RESPONSE;
   statusPacket.command = RESP_STATUS;
-  statusPacket.params[0] = leftForwardTicks;
-  statusPacket.params[1] = rightForwardTicks;
-  statusPacket.params[2] = leftReverseTicks;
-  statusPacket.params[3] = rightReverseTicks;
-  statusPacket.params[4] = leftForwardTicksTurns;
-  statusPacket.params[5] = rightForwardTicksTurns;
+  statusPacket.params[0] = redFrequency;
+  statusPacket.params[1] = greenFrequency;
+  statusPacket.params[2] = blueFrequency;
+  statusPacket.params[3] = redColour;
+  statusPacket.params[4] = greenColour;
+  statusPacket.params[5] = blueColour;
   statusPacket.params[6] = leftReverseTicksTurns;
   statusPacket.params[7] = rightReverseTicksTurns;
   statusPacket.params[8] = forwardDist;
   statusPacket.params[9] = reverseDist;
- // statusPacket.params[10] = findfrontUltra();
- // statusPacket.params[11] = findbackUltra();
- // statusPacket.params[12] = findColour();
+  statusPacket.params[10] = findfrontUltra();
+  statusPacket.params[11] = findbackUltra();
+  statusPacket.params[12] = findColour();
   sendResponse(&statusPacket);
 
 }
@@ -376,34 +345,8 @@ void writeSerial(const char *buffer, int len)
   Serial.write(buffer, len);
 }
 
-/*
-   Alex's motor drivers.
-
-*/
-
-// Set up Alex's motors. Right now this is empty, but
-// later you will replace it with code to set up the PWMs
-// to drive the motors.
-/*void setupMotors()
-{
-   Our motor set up is:
-        A1IN - Pin 5, PD5, OC0B
-        A2IN - Pin 6, PD6, OC0A
-        B1IN - Pin 10, PB2, OC1B
-        B2In - pIN 11, PB3, OC2A
-  
-}*/
-
-// Start the PWM for Alex's motors.
-// We will implement this later. For now it is
-// blank.
-/*
-void startMotors()
-{
-
-}*/
-
 // Convert percentages to PWM values
+/*
 int pwmVal(float speed)
 {
   if (speed < 0.0)
@@ -414,66 +357,7 @@ int pwmVal(float speed)
 
   return (int) ((speed / 100.0) * 255.0);
 }
-
-// Move Alex forward "dist" cm at speed "speed".
-// "speed" is expressed as a percentage. E.g. 50 is
-// move forward at half speed.
-// Specifying a distance of 0 means Alex will
-// continue moving forward indefinitely.
-/*void forward(float dist, float speed) {
-  if (dist == 0) {
-    deltaDist = 9999999;
-  } else {
-    deltaDist = dist;
-  }
-  newDist = forwardDist + deltaDist;
-
-  dir = FORWARD;
-  int val = pwmVal(speed);
-  // For now we will ignore dist and move
-  // forward indefinitely. We will fix this
-  // in Week 9.
-
-  // LF = Left forward pin, LR = Left reverse pin
-  // RF = Right forward pin, RR = Right reverse pin
-  // This will be replaced later with bare-metal code.
-
-  analogWrite(LF, val);
-  analogWrite(RF, val);
-  analogWrite(LR, 0);
-  analogWrite(RR, 0);
-}*/
-
-// Reverse Alex "dist" cm at speed "speed".
-// "speed" is expressed as a percentage. E.g. 50 is
-// reverse at half speed.
-// Specifying a distance of 0 means Alex will
-// continue reversing indefinitely.
-/*void reverse(float dist, float speed)
-{
-  if (dist == 0) {
-    deltaDist = 9999999;
-  } else {
-    deltaDist = dist;
-  }
-  newDist = reverseDist + deltaDist;
-
-  dir = BACKWARD;
-  int val = pwmVal(speed);
-
-  // For now we will ignore dist and
-  // reverse indefinitely. We will fix this
-  // in Week 9.
-
-  // LF = Left forward pin, LR = Left reverse pin
-  // RF = Right forward pin, RR = Right reverse pin
-  // This will be replaced later with bare-metal code.
-  analogWrite(LR, val);
-  analogWrite(RR, val);
-  analogWrite(LF, 0);
-  analogWrite(RF, 0);
-}*/
-
+*/
 unsigned long computeDeltaTicks(float ang) {
   unsigned long ticks = (unsigned long) ((ang * AlexCirc * COUNTS_PER_REV) / (360.0 * WHEEL_CIRC));
   return ticks;
@@ -485,28 +369,6 @@ unsigned long computeDeltaTicks(float ang) {
 // Specifying an angle of 0 degrees will cause Alex to
 // turn left indefinitely.
 
-/*
-void left(float ang, float speed)
-{
-  if (ang == 0) {
-    deltaTicks = 99999999;
-  } else {
-    deltaTicks = computeDeltaTicks(ang);
-  }
-  targetTicks = leftReverseTicksTurns + deltaTicks;
-
-  dir = LEFT;
-  int val = pwmVal(speed);
-
-  // For now we will ignore ang. We will fix this in Week 9.
-  // We will also replace this code with bare-metal later.
-  // To turn left we reverse the left wheel and move
-  // the right wheel forward.
-  analogWrite(LR, val);
-  analogWrite(RF, val);
-  analogWrite(LF, 0);
-  analogWrite(RR, 0);
-}*/
 
 // Turn Alex right "ang" degrees at speed "speed".
 // "speed" is expressed as a percentage. E.g. 50 is
@@ -535,131 +397,6 @@ void left(float ang, float speed)
   analogWrite(RF, 0);
 }*/
 
-// Stop Alex. To replace with bare-metal code later.
-
-
-// int avgFREQ()             //find average frequency for color sensor (avg of 5 readings)
-// {
-//   int reading;
-//   int total = 0;
-
-//   for (int i = 0; i < 5; i += 1) {
-//     reading = pulseIn(sensorOut, LOW);
-//     total += reading;
-//     delay(20);
-//   }
-//   return total / 5;
-// }
-
-// int findColor()             //find the color of the paper
-// {
-//   // Setting RED (R) filtered photodiodes to be read
-//   digitalWrite(S2, LOW);
-//   digitalWrite(S3, LOW);
-//   delay(100);
-
-//   // Reading the output frequency for red
-//   redFrequency = avgFREQ();
-//   redColor = map(redFrequency, 130, 860, 255, 0);
-//   delay(100);
-
-//   // Setting GREEN (G) filtered photodiodes to be read -------------------------
-//   digitalWrite(S2, HIGH);
-//   digitalWrite(S3, HIGH);
-//   delay(100);
-  
-//   // Reading the output frequency for green
-//   greenFrequency = avgFREQ();
-//   greenColor = map(greenFrequency, 260, 1970, 255, 0);
-//   delay(100);
-
-//   // Setting BLUE (B) filtered photodiodes to be read ------------------------
-//   digitalWrite(S2, LOW);
-//   digitalWrite(S3, HIGH);
-//   delay(100);
-
-//   // Reading the output frequency for blue
-//   blueFrequency = avgFREQ();
-//   blueColor = map(blueFrequency, 125, 950, 255, 0);
-//   delay(100);
-
-//   int colorCode;
-
-//   if (redColor > 280 && greenColor > 280 && blueColor > 280) {
-//     colorCode = 0;
-//   }
-//   else if (redColor > greenColor) {
-        
-//     colorCode = 1;    //0 represent red
-    
-//   } else if (greenColor > redColor) {
-    
-//     colorCode = 2;     //1 represent green
-    
-//   } else {
-//     colorCode = 0;
-//   }
-
-//   return colorCode;
-// }
-
-// void sendColour() {                       //send colour packet
-//   TPacket colourPacket;
-//   colourPacket.packetType = PACKET_TYPE_RESPONSE;
-//   colourPacket.command = RESP_COLOUR;
-//   colourPacket.params[0] = findColour();      //colour code
-//   colourPacket.params[1] = redFrequency;     //red
-//   colourPacket.params[2] = greenFrequency;   //green
-//   colourPacket.params[3] = blueFrequency;    //blue
-//   sendResponse(&colourPacket);
-// }
-
-// int findUltra()                        //find ultrasonic reading from both sensors
-// {
-//   // Send ultrasonic sensor pulse for left sensor
-//   digitalWrite(trigPinLeft, LOW);
-//   delayMicroseconds(2);
-//   digitalWrite(trigPinLeft, HIGH);
-//   delayMicroseconds(10);
-//   digitalWrite(trigPinLeft, LOW);
-
-//   // Measure time for left ultrasonic sensor echo
-//   long durationLeft = pulseIn(echoPinLeft, HIGH);
-
-//   // Calculate distance from left ultrasonic sensor
-//   distanceLeft = durationLeft / 58;
-
-//   // Send ultrasonic sensor pulse for right sensor
-//   digitalWrite(trigPinRight, LOW);
-//   delayMicroseconds(2);
-//   digitalWrite(trigPinRight, HIGH);
-//   delayMicroseconds(10);
-//   digitalWrite(trigPinRight, LOW);
-
-//   // Measure time for right ultrasonic sensor echo
-//   long durationRight = pulseIn(echoPinRight, HIGH);
-
-//   // Calculate distance from right ultrasonic sensor
-//   distanceRight = durationRight / 58;
-
-//   // Calculate sum of distance readings
-//   int distanceSum = distanceLeft + 15 + distanceRight;   //adjust value accordingly based on dist between sensors
-//   return distanceSum;
-// }
-
-// void sendUltra() {                        //send ultrasonic packet
-//   TPacket ultraPacket;
-//   ultraPacket.packetType = PACKET_TYPE_RESPONSE;
-//   ultraPacket.command = RESP_ULTRA;
-//   ultraPacket.params[0] = findUltra();
-//   sendResponse(&ultraPacket);
-// }
-
-
-/*
-   Alex's setup and run codes
-
-*/
 
 // Clears all our counters
 void clearCounters()
@@ -683,8 +420,6 @@ void clearOneCounter(int which)
 {
   clearCounters();
 }
-
-// Intialize Vincet's internal states
 
 void initializeState()
 {
@@ -721,7 +456,7 @@ void handleCommand(TPacket *command)
       sendOK();
       stop();
       break;
-
+/*
     case COMMAND_COLOUR:                         //COLOUR SENSOR
       sendOK();
 //      sendColour();
@@ -731,13 +466,14 @@ void handleCommand(TPacket *command)
       sendOK();
 //      sendUltra();
       break;
-
+*/
     case COMMAND_GET_STATS:
       sendStatus();
       break;
 
     case COMMAND_CLEAR_STATS:
       clearOneCounter(command->params[0]);
+      blank();
       sendOK();
       break;
 
@@ -787,32 +523,14 @@ void setup() {
                       ALEX_BREADTH));
   AlexCirc = PI  * AlexDiagonal;
 
-  setupColour();
-  setupUltra();
-
-  //COLOR SENSOR STUFF---------------------------
-  // pinMode(S0, OUTPUT);
-  // pinMode(S1, OUTPUT);
-  // pinMode(S2, OUTPUT);
-  // pinMode(S3, OUTPUT);
-  // pinMode(sensorOut, INPUT);     // Setting the sensorOut as an input
-  // digitalWrite(S0, HIGH);      // Setting frequency scaling to 20%
-  // digitalWrite(S1, LOW);
-  // --------------------------------------------
-
-  //ULTRASONIC SENSOR STUFF---------------------
-  // pinMode(trigPinLeft, OUTPUT);
-  // pinMode(echoPinLeft, INPUT);
-  // pinMode(trigPinRight, OUTPUT);
-  // pinMode(echoPinRight, INPUT);
-  //--------------------------------------------
 
   cli();
   setupEINT();
   setupSerial();
   startSerial();
-//  setupMotors();
- // startMotors();
+  setupColour();
+  setupUltra();
+  setupLED();
   enablePullups();
   initializeState();
   sei();
@@ -842,13 +560,7 @@ void handlePacket(TPacket *packet)
 
 void loop() {
 
-  // Uncomment the code below for Step 2 of Activity 3 in Week 8 Studio 2
-
-  //forward(100, 100);
-
-  // Uncomment the code below for Week 9 Studio 2
-
-
+  
   // put your main code here, to run repeatedly:
   TPacket recvPacket; // This holds commands from the Pi
 
@@ -878,7 +590,7 @@ void loop() {
         newDist = 0;
         stop();
       }
-    } else if (dir == STOP) {
+    } else if (dir == (TDirection) STOP) {
       deltaDist = 0;
       newDist = 0;
       stop();
@@ -898,7 +610,7 @@ void loop() {
         targetTicks = 0;
         stop();
       }
-    } else if (dir == STOP) {
+    } else if (dir == (TDirection) STOP) {
       deltaTicks = 0;
       targetTicks = 0;
       stop();
