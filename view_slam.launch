@@ -1,10 +1,14 @@
-<!--
-  Used for visualising rplidar in action.
-
-  It requires rplidar.launch.
- -->
 <launch>
-  <include file="$(find rplidar_ros)/launch/rplidar.launch" />
-  <include file="$(find rplidar_ros)/launch/hectormapping.launch" />
+  <include file="$(find rplidar_ros)/launch/hectormapping.launch" /> 
   <node name="rviz" pkg="rviz" type="rviz" args="-d $(find rplidar_ros)/rviz/slam.rviz" />
+  <node pkg="tf2_ros" type="static_transform_publisher"
+name="marker1" args="0.13 -0.06 0 1.57 0 0 laser FR" />
+  <node pkg="tf2_ros" type="static_transform_publisher"
+name="marker2" args="0.14 0 0 1.57 0 0 FR FL" />
+  <node pkg="tf2_ros" type="static_transform_publisher"
+name="marker3" args="0.2 0 0 1.57 0 0 FL BR" />
+  <node pkg="tf2_ros" type="static_transform_publisher"
+name="marker4" args="0.14 0 0 1.57 0 0 BR BL" />
+  <node pkg="tf2_ros" type="static_transform_publisher"
+name="marker5" args="0.2 0 0 1.57 0 0 BL close" />
 </launch>
