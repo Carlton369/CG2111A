@@ -35,6 +35,38 @@ int avgFreq()  //find average frequency for color sensor (avg of 5 readings)
   return total / 5;
 }
 
+int findShortestDist()
+{
+  int redDist;
+  int greenDist;
+  int blueDist;
+
+  redDist = 255 - redColour;
+  redDist = redDist*redDist;
+  greenDist = 255 - greenColour;
+  greenDist = greenDist*greenDist;
+  blueDist = 255 - blueColour;
+  blueDist = blueDist*blueDist;
+
+  redColour = redColour*redColour;
+  greenColour = greenColour*greenColour;
+  blueColour = blueColour * blueColour;
+
+  int colourDist[3]; //0 for red distance, 1 for green distance, 2 for white distance
+  colourDist[0] = redDist + greenColour + blueColour;
+  colourDist[1] = redColour + greenDist + blueColour;
+  colourDist[2] = redDist + greenDist + blueDist;
+
+  int minDist = 0;
+
+  for (long i = 1 ; i < 3 ; i += 1){
+    if (colourDist[i] < colourDist[minDist]){
+      minDist = i;
+    }
+  }
+return minDist;
+}
+    
 int findColour()  //find the color of the paper
 {
   // Setting RED (R) filtered photodiodes to be read
@@ -66,32 +98,6 @@ int findColour()  //find the color of the paper
   blueColour = map(blueFrequency, 325, 950, 255, 0);
   delay(100);
 
-  int colourCode;
-  /*
-    if (redColour > 280 && greenColour > 280 && blueColour > 280) {
-      colourCode = 0;  //0 represents white
-    } else if (redColour > greenColour && redColour > blueColour) {
-
-      colourCode = 1;  //1 represents red
-      red();
-
-    } else if (greenColour > redColour && greenColour > blueColour) {
-
-      colourCode = 2; //2 represents green
-      green();
-
-    } else {
-      colourCode = 0;
-    }
-  */
-  if (redFrequency + greenFrequency + blueFrequency < 2000) {
-    colourCode = 0; //white
-  } else if (abs(redFrequency - greenFrequency) < 200) {
-    colourCode = 2; //green
-    green();
-  } else {
-    colourCode = 1; //red
-    red();
-  }
+  int colourCode = findShortestDistance();
   return colourCode;
 }
